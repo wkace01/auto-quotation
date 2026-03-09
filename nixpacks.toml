@@ -1,0 +1,5 @@
+[providers]
+node = true
+
+[phases.setup]
+nixPkgs = ["...", "libreoffice"]
