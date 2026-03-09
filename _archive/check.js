@@ -1,1 +1,0 @@
-const fs = require('fs'); const app = fs.readFileSync('app.js', 'utf8'); const html = fs.readFileSync('index.html', 'utf8'); const ids = [...app.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)].map(m => m[1]); console.log('Missing:', ids.filter(id => !html.includes(id)));
