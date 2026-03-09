@@ -8,10 +8,10 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// LibreOffice 실행 경로 (운영 환경(Railway 등)에서는 전역 명령어 'soffice' 사용)
-const SOFFICE_PATH = process.env.NODE_ENV === 'production'
-    ? 'soffice'
-    : 'C:\\Program Files\\LibreOffice\\program\\soffice.exe';
+// LibreOffice 실행 경로 (운영 환경(Linux)에서는 전역 명령어 'soffice' 사용)
+const SOFFICE_PATH = process.platform === 'win32'
+    ? 'C:\\Program Files\\LibreOffice\\program\\soffice.exe'
+    : 'soffice';
 
 // Excel 템플릿 경로
 const TEMPLATE_PATH = path.join(__dirname, '정보통신사업부 견적서 양식_ver1.xlsx');
