@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>우경정보통신 스마트 견적서</title>
+    <!-- 새 디자인 적용 -->
+    <link rel="stylesheet" href="toss_step_style.css?v=16">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>
+        // 카카오 Postcode 스크립트를 동적으로 로드하여 app.js 초기화와 충돌 방지
+        window._kakaoPostcodeLoaded = false;
+        (function () {
+            var s = document.createElement('script');
+            s.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+            s.onload = function () {
+                window._kakaoPostcodeLoaded = true;
+                if (typeof window._onKakaoPostcodeReady === 'function') {
+                    window._onKakaoPostcodeReady();
+                }
+            };
+            s.onerror = function () {
+                console.error('[카카오맵] postcode.v2.js 로드 실패 - 네트워크 연결 또는 API 키를 확인하세요.');
+            };
+            document.head.appendChild(s);
+        })();
+    </script>
+</head>
+
+<body>
+
+    <header>
+        <div class="header-content">
+            <div class="header-badge">ICT Management</div>
+            <h1>우경정보통신 스마트 견적서</h1>
+        </div>
+    </header>
+
+    <div class="main-wrapper">
+        <div class="step-nav">
+            <div class="step-indicator active" id="nav-step1">
+                <i class="fas fa-search-location"></i> <span>1. 주소 검색</span>
+            </div>
+            <i class="fas fa-chevron-right step-divider"></i>
+            <div class="step-indicator" id="nav-step2">
+                <i class="fas fa-building"></i> <span>2. 건물 정보</span>
+            </div>
+            <i class="fas fa-chevron-right step-divider"></i>
+            <div class="step-indicator" id="nav-step3">
+                <i class="fas fa-calculator"></i> <span>3. 견적 완료</span>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="left-panel">
+                <!-- STEP 1: Address Search -->
+                <div class="step-content active" id="step1-content">
+                    <div class="card" id="card-address-search">
+                        <div class="card-title">1단계: 대상처 주소 검색</div>
+                        <p style="font-size:0.9rem; color:var(--toss-text-muted); margin-bottom:1rem; font-weight:500;">
+                            검색창에서 건물 주소를 검색하고 선택해주세요.
+                        </p>
+                        <div id="kakao-embed-container"
+                            style="width:100%; height:380px; border-radius:12px; overflow:hidden; background:var(--toss-input-bg);">
+                        </div>
+                    </div>
+                </div><!-- End Step 1 -->
+
+                <!-- STEP 2: Building Info -->
+                <div class="step-content" id="step2-content">
+                    <div class="card" id="card-building-info">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; gap:0.5rem;">
+                            <div class="card-title" style="margin-bottom:0; flex:1;">2단계: 건물 및 영업 정보 세팅</div>
+                            <button id="btn-reset-addr" title="처음으로 돌아가기" style="white-space:nowrap; flex-shrink:0;">
+                                <i class="fas fa-redo"></i> 처음으로
+                            </button>
+                        </div>
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label>선택된 주소</label>
+                <div style="display: flex; gap: 0.5rem; flex-direction:column;">
+                    <input type="text" id="address" readonly>
+                    <button id="btn-fetch-building">
+                        건축물대장 조회하기
+                    </button>
+                </div>
+            </div>
+
+            <!-- Building Register Result Panel -->
+            <div id="building-fetch-status" style="display:none; font-size:0.85rem; padding:0.5rem; border-radius:8px;">
+            </div>
+
+            <div id="building-result-panel" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <span style="font-size:0.9rem; font-weight:700; color:var(--toss-text-main);">조회 결과</span>
+                    <button id="btn-apply-building">데이터 적용</button>
+                </div>
+                <div id="building-result-content"></div>
+            </div>
+
+            <div class="form-grid two-cols">
+                <div class="form-group">
+                    <label>대상처명 (고객명)</label>
+                    <input type="text" id="customer-name" placeholder="예: 휴먼타워">
+                </div>
+                <div class="form-group">
+                    <label>연면적 (㎡)</label>
+                    <input type="number" id="floor-area" placeholder="자동 입력">
+                </div>
+                <div class="form-group">
+                    <label>연면적 등급 분류</label>
+                    <div style="display:flex; align-items:center; height:100%;">
+                        <span id="floor-grade">자동 분류</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>사용승인일</label>
+                    <input type="text" id="use-apr-day" placeholder="자동 입력">
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label>주용도</label>
+                    <input type="text" id="purpose" placeholder="예: 업무시설, 공동주택">
+                </div>
+
+                <div class="form-group">
+                    <label>담당자명</label>
+                    <input type="text" id="manager" placeholder="홍길동">
+                </div>
+                <div class="form-group">
+                    <label>담당자 연락처</label>
+                    <input type="text" id="manager-phone" placeholder="010-0000-0000">
+                </div>
+                <div class="form-group">
+                    <label>영업 담당자</label>
+                    <select id="sales-manager">
+                        <option value="">담당자 선택</option>
+                        <option value="박진철">박진철</option>
+                        <option value="임학빈">임학빈</option>
+                        <option value="공대은">공대은</option>
+                        <option value="이태평">이태평</option>
+                        <option value="전무승">전무승</option>
+                        <option value="김태훈">김태훈</option>
+                        <option value="이정국">이정국</option>
+                        <option value="이승학">이승학</option>
+                        <option value="김학수">김학수</option>
+                        <option value="김찬진">김찬진</option>
+                        <option value="신홍민">신홍민</option>
+                        <option value="한춘교">한춘교</option>
+                        <option value="박민수">박민수</option>
+                        <option value="이우현">이우현</option>
+                        <option value="고윤성">고윤성</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>영업 담당자 연락처</label>
+                    <input type="text" id="sales-manager-phone" placeholder="010-0000-0000" readonly>
+                </div>
+            </div>
+            </div><!-- End card-building-info -->
+
+            <!-- CONDITION TABLE -->
+            <div class="card" id="card-condition" style="display:none; margin-top: 1.5rem; padding: 0;">
+                <div
+                    style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; padding: 1.5rem 1.5rem 0;">
+                    <div class="card-title" style="margin-bottom:0;">
+                        적용 견적 조건
+                        <span id="cond-grade"
+                            style="margin-left:0.4rem; font-size:0.9rem; font-weight:700; color:var(--toss-blue);"></span>
+                        <span id="cond-range-label"
+                            style="font-size:0.8rem; color:var(--toss-text-muted); font-weight:400; margin-left:0.4rem;"></span>
+                    </div>
+                    <button id="btn-restore-cond">기본값 복원</button>
+                </div>
+
+                <div style="padding: 0 1.5rem 1.5rem;">
+                    <div class="cond-group-title">선임위탁 비용</div>
+                    <div class="cond-row" data-row-item="appointment">
+                        <span class="cond-label">
+                            <button class="btn-toggle-item" data-item="appointment" title="항목 제외/포함"><i
+                                    class="fas fa-minus-circle"></i></button>
+                            월 단가
+                        </span>
+                        <div class="cond-controls">
+                            <button class="btn-adj" data-adj="-10000" data-target="cond-monthly-appointment">-</button>
+                            <input type="text" id="cond-monthly-appointment" class="cond-input cond-field">
+                            <button class="btn-adj" data-adj="10000" data-target="cond-monthly-appointment">+</button>
+                        </div>
+                    </div>
+                    <div class="cond-row" data-row-item="appointment">
+                        <span class="cond-label">연간 합계</span>
+                        <div class="cond-controls">
+                            <button class="btn-adj" data-adj="-10000" data-target="cond-yearly-appointment">-</button>
+                            <input type="text" id="cond-yearly-appointment" class="cond-input cond-field">
+                            <button class="btn-adj" data-adj="10000" data-target="cond-yearly-appointment">+</button>
+                        </div>
+                    </div>
+
+                    <div class="cond-group-title">유지·성능점검 비용</div>
+                    <div class="cond-row" data-row-item="maintenance">
+                        <span class="cond-label">
+                            <button class="btn-toggle-item" data-item="maintenance" title="항목 제외/포함"><i
+                                    class="fas fa-minus-circle"></i></button>
+                            유지점검
+                        </span>
+                        <div class="cond-controls">
+                            <button class="btn-adj" data-adj="-10000" data-target="cond-yearly-maintenance">-</button>
+                            <input type="text" id="cond-yearly-maintenance" class="cond-input cond-field">
+                            <button class="btn-adj" data-adj="10000" data-target="cond-yearly-maintenance">+</button>
+                        </div>
+                    </div>
+                    <div class="cond-row" data-row-item="inspection">
+                        <span class="cond-label">
+                            <button class="btn-toggle-item" data-item="inspection" title="항목 제외/포함"><i
+                                    class="fas fa-minus-circle"></i></button>
+                            성능점검
+                        </span>
+                        <div class="cond-controls">
+                            <button class="btn-adj" data-adj="-10000" data-target="cond-yearly-inspection">-</button>
+                            <input type="text" id="cond-yearly-inspection" class="cond-input cond-field">
+                            <button class="btn-adj" data-adj="10000" data-target="cond-yearly-inspection">+</button>
+                        </div>
+                    </div>
+
+                    <div class="cond-group-title" style="margin-top:2rem;">합계</div>
+                    <div class="cond-row">
+                        <span class="cond-label">할인율</span>
+                        <div class="cond-controls" style="background:transparent; padding:0;">
+                            <button class="btn-adj-discount" data-adj="-10">-</button>
+                            <span id="cond-discount-display"
+                                style="width:50px; text-align:center; font-weight:700; font-size:1.1rem;">0%</span>
+                            <button class="btn-adj-discount" data-adj="10">+</button>
+                        </div>
+                    </div>
+                    <div class="cond-row">
+                        <span class="cond-label">년간 총합</span>
+                        <span id="cond-yearly-total"></span>
+                    </div>
+                    <div class="cond-row">
+                        <span class="cond-label">월 환산</span>
+                        <span id="cond-monthly-total"></span>
+                    </div>
+
+                    <div class="cond-group-title" style="margin-top:2rem;">투입 인력</div>
+                    <div class="cond-row" data-row-item="inspection">
+                        <span class="cond-label">성능점검 인력</span>
+                        <div class="cond-controls">
+                            <button class="btn-adj" data-adj="-1" data-target="cond-inspection-workers">-</button>
+                            <input type="number" id="cond-inspection-workers" class="cond-input cond-field"
+                                style="width:50px !important; text-align:center; padding:0.4rem!important; font-size:1rem;">
+                            <button class="btn-adj" data-adj="1" data-target="cond-inspection-workers">+</button>
+                        </div>
+                    </div>
+                    <div class="cond-row" data-row-item="maintenance">
+                        <span class="cond-label">유지점검 인력</span>
+                        <div class="cond-controls">
+                            <button class="btn-adj" data-adj="-1" data-target="cond-maintenance-workers">-</button>
+                            <input type="number" id="cond-maintenance-workers" class="cond-input cond-field"
+                                style="width:50px !important; text-align:center; padding:0.4rem!important; font-size:1rem;">
+                            <button class="btn-adj" data-adj="1" data-target="cond-maintenance-workers">+</button>
+                        </div>
+                    </div>
+                        <p class="hint-text">값 수정 시 즉시 우측 요약 패널에 반영됩니다.</p>
+                    </div>
+                    </div><!-- End step 2 inner card padding -->
+
+                    <div class="step-actions" style="margin-top: 2rem;">
+                        <button class="btn-prev" onclick="goToStep(1)"><i class="fas fa-arrow-left"></i> 이전 단계</button>
+                        <button class="btn-next-primary" id="btn-next-step3" onclick="goToStep(3)">최종 견적서 확인하기 <i class="fas fa-arrow-right"></i></button>
+                    </div>
+                </div><!-- End Step 2 -->
+
+                <!-- STEP 3: Detailed Data View -->
+                <div class="step-content" id="step3-content">
+
+
+            <!-- BOTTOM: Detailed Sheet Tabs -->
+            <div class="card" id="card-detail" style="display:none; margin-top: 0;">
+                <div class="tabs" id="tab-bar">
+                    <button class="tab-btn active" data-tab="tab1">1. 견적서</button>
+                    <button class="tab-btn" data-tab="tab2">2.1 성능점검</button>
+                    <button class="tab-btn" data-tab="tab3">2.2 유지점검</button>
+                    <button class="tab-btn" data-tab="tab4">2.3 선임위탁</button>
+                </div>
+                <div id="tab1" class="tab-content active">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>항목</th>
+                                <th>값</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-q-total"></tbody>
+                    </table>
+                </div>
+                <div id="tab2" class="tab-content">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>산식</th>
+                                <th>금액</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-q-inspection"></tbody>
+                    </table>
+                </div>
+                <div id="tab3" class="tab-content">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>산식</th>
+                                <th>금액</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-q-maintenance"></tbody>
+                    </table>
+                </div>
+                <div id="tab4" class="tab-content">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>내용</th>
+                                <th>금액</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-q-appointment"></tbody>
+                    </table>
+                </div>
+            </div>
+                    <div class="step-actions" style="margin-top:2rem;">
+                        <button class="btn-prev" onclick="goToStep(2)"><i class="fas fa-arrow-left"></i> 이전 단계</button>
+                    </div>
+                </div><!-- End Step 3 -->
+            </div><!-- End left-panel -->
+
+            <div class="right-panel">
+                <!-- RIGHT: Real-time Summary (Always visible from Step 2 onwards if implemented properly, or specifically handled) -->
+                <div class="card" id="card-summary" style="display:none;">
+                    <div class="card-title">실시간 견적 요약</div>
+                    <div class="summary-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">건물 등급</div>
+                            <div id="res-grade" class="stat-value">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">조정계수</div>
+                            <div id="res-coef" class="stat-value">-</div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <div class="stat-label">연간 총 견적금액</div>
+                            <div id="res-yearly" class="stat-value">₩ 0</div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <div class="stat-label">월 견적금액</div>
+                            <div id="res-monthly" class="stat-value">₩ 0</div>
+                        </div>
+                        <div style="display:flex; gap:0.5rem;">
+                            <div class="stat-card" style="flex:1;">
+                                <div class="stat-label">성능점검 투입인원</div>
+                                <div id="res-workers" class="stat-value">-</div>
+                            </div>
+                            <div class="stat-card" style="flex:1;">
+                                <div class="stat-label">유지점검 투입인원</div>
+                                <div id="res-maint-workers" class="stat-value">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM ACTIONS -->
+                <div id="card-bottom-actions" style="display: none;">
+                    <button class="export-btn" id="btn-save-pdf">
+                        견적서 PDF 생성
+                    </button>
+                    <button class="export-btn" id="btn-view-json" style="margin-top:0.75rem;">
+                        JSON 코드 확인
+                    </button>
+                </div>
+
+                <!-- PDF 생성 상태 메시지 -->
+                <div id="sheet-status-bar"
+                    style="display:none; text-align:center; padding:1rem; border-radius:12px; font-weight:600; font-size:0.9rem; margin-top:0.75rem;">
+                </div>
+            </div><!-- End right-panel -->
+
+        </div><!-- End container -->
+
+    <!-- Modal for JSON -->
+    <div id="modal-json"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:1rem;">
+        <div class="card"
+            style="width: 100%; max-width:600px; max-height:80vh; display:flex; flex-direction:column; padding: 1.5rem;">
+            <div class="card-title" style="justify-content:space-between;">
+                JSON Export Result
+                <button id="btn-modal-close"
+                    style="background:var(--toss-input-bg); border:none; border-radius:8px; padding:0.5rem 0.75rem; font-weight:600; font-size:0.85rem;">닫기</button>
+            </div>
+            <pre id="json-result"
+                style="background:var(--toss-input-bg); padding:1rem; border-radius:12px; font-size:0.85rem; overflow:auto; flex:1;"></pre>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script src="app_step.js"></script>
+</body>
+
+</html>

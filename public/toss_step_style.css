@@ -639,13 +639,19 @@ button {
 }
 
 /* Word-break strategy to prevent awkward wrapping (e.g. 대상물(고객명) 이 잘리지 않게) */
-body, .stat-label, .stat-value, .data-table td, .data-table th, .cond-label {
+body, .stat-label, .stat-value, .data-table td, .data-table th, .cond-label, .card-title, button {
     word-break: keep-all;
     overflow-wrap: break-word;
 }
 
+.status-msg-mobile { display: none; }
+.status-msg-pc { display: inline; }
+
 /* --- Mobile Specific Overrides --- */
 @media (max-width: 768px) {
+    .status-msg-pc { display: none; }
+    .status-msg-mobile { display: block; line-height: 1.6; }
+    
     .container {
         padding: 0 0.5rem;
     }

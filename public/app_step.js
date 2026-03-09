@@ -639,7 +639,8 @@ async function fetchBuildingInfo() {
         panelEl.style.display = 'block';
         statusEl.style.background = '#f0fdf4';
         statusEl.style.color = '#15803d';
-        statusEl.innerHTML = '✅ 건축물대장 조회 성공! "✅ 이 값으로 적용" 버튼으로 값을 입력하세요.';
+        statusEl.innerHTML = '<span class="status-msg-pc">✅ 건축물대장 조회 성공! "✅ 이 값으로 적용" 버튼으로 값을 입력하세요.</span>' + 
+                             '<span class="status-msg-mobile">✅ 건축물대장 조회 성공!<br>"✅ 이 값으로 적용" 버튼으로<br>값을 입력하세요.</span>';
     } catch (err) {
         statusEl.style.background = '#fef2f2';
         statusEl.style.color = '#b91c1c';
