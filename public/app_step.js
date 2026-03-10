@@ -61,7 +61,10 @@ const state = {
     purpose: "",
     useAprDay: "",
     manager: "",
+    managerPosition: "",
     managerPhone: "",
+    managerMobile: "",
+    managerEmail: "",
     salesManager: "",
     salesManagerPhone: "",
     selectedEquipments: new Set(),
@@ -749,51 +752,49 @@ document.getElementById('use-apr-day').addEventListener('input', (e) => {
     state.useAprDay = e.target.value;
 });
 
-document.getElementById('manager').addEventListener('input', (e) => {
-    state.manager = e.target.value;
-});
-
 // ---- 전화번호 자동 포맷팅 유틸 ----
 function formatPhone(value) {
-    // 숫자만 추출, 최대 11자리
     const digits = value.replace(/\D/g, '').slice(0, 11);
     const len = digits.length;
-
     if (digits.startsWith('02')) {
-        // 서울 (02): 02-XXXX-XXXX 또는 02-XXX-XXXX
-        if (len < 3) return digits;                                                    // 02
-        if (len < 6) return digits.slice(0, 2) + '-' + digits.slice(2);               // 02-XXX
-        if (len < 10) return digits.slice(0, 2) + '-' + digits.slice(2, 5) + '-' + digits.slice(5); // 02-XXX-XXXX
-        return digits.slice(0, 2) + '-' + digits.slice(2, 6) + '-' + digits.slice(6);    // 02-XXXX-XXXX
+        if (len < 3) return digits;
+        if (len < 6) return digits.slice(0, 2) + '-' + digits.slice(2);
+        if (len < 10) return digits.slice(0, 2) + '-' + digits.slice(2, 5) + '-' + digits.slice(5);
+        return digits.slice(0, 2) + '-' + digits.slice(2, 6) + '-' + digits.slice(6);
     } else {
-        // 010 / 031 등 3자리 국번
-        if (len < 4) return digits;                                                    // 010
-        if (len < 7) return digits.slice(0, 3) + '-' + digits.slice(3);               // 010-XXXX
-        if (len < 11) return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6); // 010-XXX-XXXX
-        return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7);    // 010-XXXX-XXXX
+        if (len < 4) return digits;
+        if (len < 7) return digits.slice(0, 3) + '-' + digits.slice(3);
+        if (len < 11) return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+        return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7);
     }
 }
 
-const managerPhoneEl = document.getElementById('manager-phone');
-if (managerPhoneEl) {
-    managerPhoneEl.addEventListener('input', function () {
-        const pos = this.selectionStart;             // 입력 전 커서 위치
-        const before = this.value;
-        const formatted = formatPhone(this.value);
+// 필드 이벤트 리스너 등록 후 state 동기화
+const fieldMap = {
+    'manager': 'manager',
+    'manager-position': 'managerPosition',
+    'manager-phone': 'managerPhone',
+    'manager-mobile': 'managerMobile',
+    'manager-email': 'managerEmail'
+};
 
-        // 포맷팅 결과가 다를 때만 덮어쓰기 (그렇지 않으면 특정 환경에서 입력이 막히거나 씹히는 현상 발생)
-        if (before !== formatted) {
-            this.value = formatted;
-            // 커서 위치 보정: 추가된 하이픈 수 만큼 앞으로 밀기
-            const added = formatted.length - before.length;
-            const newPos = Math.max(0, pos + added);
-            this.setSelectionRange(newPos, newPos);
-        }
-        state.managerPhone = formatted;
-    });
-} else {
-    console.error('[디버그] #manager-phone 요소를 찾을 수 없습니다.');
-}
+Object.entries(fieldMap).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('input', (e) => {
+            let val = e.target.value;
+            if (id.includes('phone') || id.includes('mobile')) {
+                const pos = el.selectionStart;
+                const before = el.value;
+                val = formatPhone(val);
+                if (before !== val) {
+                    el.value = val;
+                }
+            }
+            state[key] = val;
+        });
+    }
+});
 
 // 영업 담당자 변경 시 연락처 자동 입력
 document.getElementById('sales-manager').addEventListener('change', (e) => {
@@ -1046,39 +1047,39 @@ function setPdfBtnEnabled(enabled) {
     pdfBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
 }
 
-// PDF 저장 버튼 - LibreOffice 서버 호출
+// PDF 저장 버튼 - 에어테이블 저장 및 PDF 업로드 통합 브랜치
 document.getElementById('btn-save-pdf').addEventListener('click', async () => {
-    const mapping = generateMapping();
     const btn = document.getElementById('btn-save-pdf');
 
-    // 연면적 유효성 검사
     if (!state.floorArea || state.floorArea < 5000) {
         showStatusBar('⚠️ 연면적을 먼저 입력해주세요. (5,000㎡ 이상)', 'warning');
         return;
     }
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PDF 생성 중...';
-    showStatusBar('<i class="fas fa-spinner fa-spin"></i> Excel 데이터 입력 및 LibreOffice PDF 변환 중... (약 10초 소요)', 'info');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 시스템 저장 및 PDF 생성 중...';
+    showStatusBar('<i class="fas fa-spinner fa-spin"></i> 1단계: 에어테이블 고객/견적 데이터 저장 중...', 'info');
 
     try {
-        const res = await fetch(PDF_SERVER_URL, {
+        // 1. 에어테이블 저장 및 서버측 PDF 업로드 자동 실행
+        // (airtable_service.js 내부에서 /upload-pdf-to-airtable 호출 포함됨)
+        const result = await window.airtableService.saveQuotation(state);
+        
+        showStatusBar('<i class="fas fa-check-circle"></i> 2단계: 에어테이블 저장 완료! 최종 PDF 다운로드 준비 중...', 'success');
+
+        // 2. 브라우저에서 사용할 PDF 다운로드 별도 실행
+        const mapping = generateMapping();
+        const res = await fetch(`${BACKEND_URL}/generate-pdf`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(mapping)
         });
 
-        if (!res.ok) {
-            const errData = await res.json().catch(() => ({ error: res.statusText }));
-            throw new Error(errData.error || `서버 오류 (${res.status})`);
-        }
+        if (!res.ok) throw new Error('PDF 생성 서버 오류');
 
-        // PDF blob 수신 후 다운로드
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-
-        // Content-Disposition 헤더에서 파일명 추출
         const disposition = res.headers.get('Content-Disposition') || '';
         const nameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
         const fileName = nameMatch ? decodeURIComponent(nameMatch[1]) : `${state.customerName || '견적서'}_견적서.pdf`;
@@ -1090,23 +1091,18 @@ document.getElementById('btn-save-pdf').addEventListener('click', async () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        btn.innerHTML = '<i class="fas fa-check-circle"></i> PDF 다운로드 완료';
-        showStatusBar(`✅ <b>${fileName}</b> 다운로드 완료!`, 'success');
+        btn.innerHTML = '<i class="fas fa-check-circle"></i> 저장 및 다운로드 완료';
+        showStatusBar(`✅ 에어테이블 등록 및 <b>${fileName}</b> 다운로드 완료!`, 'success');
 
-        // 3초 후 버튼 복구
         setTimeout(() => {
-            btn.innerHTML = '<i class="fas fa-file-pdf"></i> 견적서 PDF 생성 및 다운로드';
+            btn.innerHTML = '<i class="fas fa-file-pdf"></i> 견적서 PDF 생성 및 저장';
             btn.disabled = false;
         }, 3000);
 
     } catch (err) {
-        console.error('PDF 생성 오류:', err);
-        let msg = err.message;
-        if (err.message.includes('fetch') || err.message.includes('Failed to fetch')) {
-            msg = 'PDF 서버에 연결할 수 없습니다. <br>터미널에서 <code>node server.js</code> 명령으로 서버를 실행해주세요.';
-        }
-        showStatusBar(`❌ 오류: ${msg}`, 'error');
-        btn.innerHTML = '<i class="fas fa-file-pdf"></i> 견적서 PDF 생성 및 다우로드';
+        console.error('실행 오류:', err);
+        showStatusBar(`❌ 오류: ${err.message}`, 'error');
+        btn.innerHTML = '<i class="fas fa-file-pdf"></i> 견적서 PDF 생성 및 저장';
         btn.disabled = false;
     }
 });
@@ -1138,12 +1134,37 @@ function _startKakaoSearch() {
 }
 
 if (window._kakaoPostcodeLoaded) {
-    // 스크립트가 이미 로드 완료된 경우 (즉시 실행)
     _startKakaoSearch();
 } else {
-    // 아직 로드 중인 경우: index.html의 onload 콜백 등록
     window._onKakaoPostcodeReady = _startKakaoSearch;
 }
+
+// ---- 서버 상태 체크 (Admin Badge) ----
+async function checkServerHealth() {
+    const badge = document.getElementById('remote-status-badge');
+    const text = document.getElementById('env-status-text');
+    if (!badge || !text) return;
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/health`);
+        const data = await res.json();
+        
+        if (data.status === 'ok' && data.envCheck) {
+            badge.style.background = '#dcfce7';
+            badge.style.color = '#166534';
+            text.innerHTML = 'Airtable 연동 중 (Security Active)';
+        } else {
+            badge.style.background = '#fee2e2';
+            badge.style.color = '#991b1b';
+            text.innerHTML = 'Airtable 키 미설정 (Check Variables)';
+        }
+    } catch (err) {
+        badge.style.background = '#f3f4f6';
+        text.innerHTML = 'Local Server Mode';
+    }
+}
+
+checkServerHealth();
 
 // ---- Adjuster Buttons (+/-) ----
 document.querySelectorAll('.btn-adj').forEach(btn => {

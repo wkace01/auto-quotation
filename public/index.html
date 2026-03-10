@@ -128,8 +128,16 @@
                     <input type="text" id="manager" placeholder="홍길동">
                 </div>
                 <div class="form-group">
-                    <label>담당자 연락처</label>
-                    <input type="text" id="manager-phone" placeholder="010-0000-0000">
+                    <label>담당자 직함</label>
+                    <input type="text" id="manager-position" placeholder="과장">
+                </div>
+                <div class="form-group">
+                    <label>담당자 휴대전화</label>
+                    <input type="text" id="manager-mobile" placeholder="010-0000-0000">
+                </div>
+                <div class="form-group">
+                    <label>이메일</label>
+                    <input type="email" id="manager-email" placeholder="example@wkace.com">
                 </div>
                 <div class="form-group">
                     <label>영업 담당자</label>
@@ -405,7 +413,25 @@
     </div>
 
     <script src="common.js"></script>
+    <script src="airtable_service.js"></script>
     <script src="app_step.js"></script>
+
+    <!-- Footer / Admin Status Area -->
+    <footer style="margin-top: 4rem; padding: 2rem; border-top: 1px solid var(--toss-border); text-align: center; background: #fff;">
+        <div style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="font-size: 0.85rem; color: var(--toss-text-muted); font-weight: 500;">
+                © 2026 우경정보통신 솔루션사업부. All rights reserved.
+            </div>
+            <div id="admin-status-area" style="display: flex; align-items: center; gap: 1rem;">
+                <span id="remote-status-badge" style="font-size: 0.75rem; background: #f3f4f6; color: #6b7280; padding: 4px 10px; border-radius: 100px; font-weight: 600;">
+                    <i class="fas fa-plug"></i> <span id="env-status-text">연동 확인 중...</span>
+                </span>
+                <a href="https://airtable.com/appFEZaTg3yZU1QwW" target="_blank" style="font-size: 0.85rem; color: var(--toss-blue); text-decoration: none; font-weight: 600;">
+                    <i class="fab fa-artstation"></i> Airtable DB 바로가기
+                </a>
+            </div>
+        </div>
+    </footer>
 </body>
 
 </html>
