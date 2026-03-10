@@ -13,22 +13,10 @@ const SOFFICE_PATH = process.platform === 'win32'
     ? 'C:\\Program Files\\LibreOffice\\program\\soffice.exe'
     : 'soffice';
 
-// Excel 템플릿 경로
+// Excel 템플릿 경로 (현재 폴더에 있는 파일명)
 const TEMPLATE_PATH = path.join(__dirname, '정보통신사업부 견적서 양식_ver1.xlsx');
 // 임시 파일 저장 디렉토리
 const TEMP_DIR = path.join(__dirname, 'temp_pdf');
-
-// ── PDF에 포함할 시트 목록 (순서대로 출력됨) ─────────────────────
-// 이 목록에 없는 시트는 PDF에서 제외됩니다.
-const OUTPUT_SHEETS = [
-    '표지',
-    '1. 견적서',
-    '2.1 성능점검 산출내역',
-    '2.2 유지점검 산출내역',
-    '2.3 선임 산출내역',
-    '3. 업무처리 절차',
-    '4. 성능점검 수량내역',
-];
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -41,9 +29,9 @@ if (!fs.existsSync(TEMP_DIR)) {
     fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
-// ── POST /generate-pdf ────────────────────────────────────────────
-// 흐름: JSON 수신 → xlsx 템플릿에 셀 입력 → 불필요 시트 제거
-//       → LibreOffice로 전체 변환 (남은 시트 = 원하는 시트만) → PDF 다운로드
+/**
+ * ── POST /generate-pdf ──────────────────────────────────────────── (단순 생성 및 다운로드 전용)
+ */
 app.post('/generate-pdf', async (req, res) => {
     const timestamp = Date.now();
     const tempXlsx = path.join(TEMP_DIR, `quotation_${timestamp}.xlsx`);
@@ -51,78 +39,34 @@ app.post('/generate-pdf', async (req, res) => {
 
     try {
         const { templateName, outputSheets, data } = req.body;
-
-        // 호환성 보장: 구버전 (data만 바로 보내는 경우) 방어 로직
         const actualData = data || req.body;
         const actualTemplate = templateName || '정보통신사업부 견적서 양식_ver1.xlsx';
-
-        // 시트 목록이 명시되지 않으면, 프론트에서 보낸 data의 key(시트명) 배열을 출력 대상으로 간주
         const actualSheets = outputSheets || Object.keys(actualData);
 
-        if (!actualData || typeof actualData !== 'object') {
-            return res.status(400).json({ error: '유효하지 않은 JSON 데이터입니다.' });
-        }
-
-        const templatePath = path.join(__dirname, actualTemplate);
-        if (!fs.existsSync(templatePath)) {
-            return res.status(404).json({ error: `지정된 템플릿 파일(${actualTemplate})을 찾을 수 없습니다.` });
-        }
-
-        // ── STEP 1: 템플릿 로드 (xlsx-populate) ──
-        const workbook = await XlsxPopulate.fromFileAsync(templatePath);
-        console.log(`📂 [${actualTemplate}] 로드 완료 (시트 수: ${workbook.sheets().length}개)`);
-
-        // ── STEP 2: 출력 대상이 아닌 시트 숨김 (veryHidden) ──
-        let removedCount = 0;
+        const workbook = await XlsxPopulate.fromFileAsync(path.join(__dirname, actualTemplate));
         workbook.sheets().forEach(sheet => {
-            if (!actualSheets.includes(sheet.name())) {
-                sheet.hidden('very');
-                removedCount++;
-            }
+            if (!actualSheets.includes(sheet.name())) sheet.hidden('very');
         });
-        console.log(`🗂️  시트 처리: 출력 대상 ${actualSheets.length}개, 숨김 ${removedCount}개`);
 
-        // ── STEP 3: JSON → 각 시트 셀에 값 입력 ──────────────────
         for (const [sheetName, cells] of Object.entries(actualData)) {
             const sheet = workbook.sheet(sheetName);
-            if (!sheet) {
-                console.warn(`⚠️  시트 없음: "${sheetName}"`);
-                continue;
-            }
-            if (!Array.isArray(cells)) continue;
-
-            let filled = 0;
+            if (!sheet || !Array.isArray(cells)) continue;
             for (const { cell, value } of cells) {
-                if (!cell) continue;
-                try {
+                if (cell) {
                     const ws_cell = sheet.cell(cell);
                     ws_cell.formula(undefined);
                     ws_cell.value(value);
-                    filled++;
-                } catch (e) {
-                    console.warn(`⚠️  [${sheetName}] 셀 쓰기 실패 (${cell}): ${e.message}`);
                 }
             }
-            console.log(`  ✏️  [${sheetName}] ${filled}개 셀 입력`);
         }
 
-        // ── STEP 4: 임시 xlsx 저장 ───────────────────────────────
         await workbook.toFileAsync(tempXlsx);
-        console.log(`💾 임시 xlsx 저장 완료`);
+        execSync(`"${SOFFICE_PATH}" --headless --convert-to pdf --outdir "${TEMP_DIR}" "${tempXlsx}"`, { timeout: 90000 });
 
-        // ── STEP 5: LibreOffice로 PDF 변환 ───────────────────────
-        const cmd = `"${SOFFICE_PATH}" --headless --convert-to pdf --outdir "${TEMP_DIR}" "${tempXlsx}"`;
-        console.log(`🔄 LibreOffice 변환 중...`);
-        execSync(cmd, { timeout: 90000 });
+        if (!fs.existsSync(expectedPdf)) throw new Error('PDF 변환 실패');
 
-        if (!fs.existsSync(expectedPdf)) {
-            throw new Error('PDF 변환 실패: 출력 파일이 생성되지 않았습니다.');
-        }
-
-        // ── STEP 6: PDF 파일명 동적 생성 ──────────────────────────────
         const customerName = (() => {
             try {
-                // 1. 견적서 시트가 없을 수도 있으므로, 전달받은 데이터의 첫 배열에서 고객명 탐색
                 for (const cells of Object.values(actualData)) {
                     if (Array.isArray(cells)) {
                         const found = cells.find(c => c.name === '고객명');
@@ -135,29 +79,125 @@ app.post('/generate-pdf', async (req, res) => {
         const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const fileName = `${customerName}_견적서_${today}.pdf`;
 
-        // ── STEP 7: PDF 응답 ─────────────────────────────────────
-        console.log(`📤 응답 전송: ${fileName}`);
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
         res.setHeader('Content-Type', 'application/pdf');
-        res.sendFile(expectedPdf, {}, (err) => {
-            cleanup(tempXlsx, expectedPdf);
-            if (err && err.code !== 'ECONNABORTED') console.error('파일 전송 오류:', err);
-        });
+        res.sendFile(expectedPdf, {}, (err) => { cleanup(tempXlsx, expectedPdf); });
 
     } catch (err) {
-        console.error('❌ 오류:', err.message);
+        console.error('❌ PDF 생성 오류:', err.message);
         cleanup(tempXlsx, expectedPdf);
         if (!res.headersSent) res.status(500).json({ error: err.message });
     }
 });
 
-// ── GET /health ───────────────────────────────────────────────────
+/**
+ * ── POST /upload-pdf-to-airtable ────────────────────────────────────────── (PDF 생성 후 에어테이블 직접 업로드)
+ */
+app.post('/upload-pdf-to-airtable', async (req, res) => {
+    const timestamp = Date.now();
+    const tempXlsx = path.join(TEMP_DIR, `upload_${timestamp}.xlsx`);
+    const expectedPdf = tempXlsx.replace('.xlsx', '.pdf');
+
+    try {
+        const { mapping, airtableInfo } = req.body;
+        const { baseId, recordId } = airtableInfo;
+        const token = process.env.AIRTABLE_API_KEY; // Railway에서 설정된 키
+
+        if (!token) throw new Error('서버 환경 변수 AIRTABLE_API_KEY가 없습니다.');
+
+        const workbook = await XlsxPopulate.fromFileAsync(TEMPLATE_PATH);
+        const actualSheets = Object.keys(mapping);
+        workbook.sheets().forEach(sheet => {
+            if (!actualSheets.includes(sheet.name())) sheet.hidden('very');
+        });
+
+        for (const [sheetName, cells] of Object.entries(mapping)) {
+            const sheet = workbook.sheet(sheetName);
+            if (!sheet || !Array.isArray(cells)) continue;
+            for (const { cell, value } of cells) {
+                if (cell) {
+                    const ws_cell = sheet.cell(cell);
+                    ws_cell.formula(undefined);
+                    ws_cell.value(value);
+                }
+            }
+        }
+        await workbook.toFileAsync(tempXlsx);
+        execSync(`"${SOFFICE_PATH}" --headless --convert-to pdf --outdir "${TEMP_DIR}" "${tempXlsx}"`, { timeout: 90000 });
+
+        if (!fs.existsSync(expectedPdf)) throw new Error('PDF 생성 실패');
+
+        const pdfBuffer = fs.readFileSync(expectedPdf);
+        const base64Pdf = pdfBuffer.toString('base64');
+        const fileName = (mapping["1. 견적서"]?.find(c => c.name === '고객명')?.value || '견적서') + '_견적서.pdf';
+
+        const fieldId = "fld4Zc6J2Etls5F48"; 
+        const uploadUrl = `https://content.airtable.com/v0/${baseId}/${recordId}/${fieldId}/uploadAttachment`;
+        
+        const airRes = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                contentType: 'application/pdf',
+                file: base64Pdf,
+                filename: fileName
+            })
+        });
+
+        const airData = await airRes.json();
+        if (!airRes.ok) throw new Error(airData.error?.message || '업로드 실패');
+
+        res.json({ success: true, airData });
+
+    } catch (err) {
+        console.error('❌ 업로드 오류:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        cleanup(tempXlsx, expectedPdf);
+    }
+});
+
+/**
+ * ── ANY /airtable-proxy ────────────────────────────────────────────────── (보안 프록시)
+ */
+app.all('/airtable-proxy/*', async (req, res) => {
+    const queryStr = req.url.includes('?') ? '?' + req.url.split('?')[1] : '';
+    const targetUrl = `https://api.airtable.com/v0/${req.params[0]}${queryStr}`;
+    const token = process.env.AIRTABLE_API_KEY;
+
+    if (!token) return res.status(500).json({ error: '서버에 AIRTABLE_API_KEY가 설정되지 않았습니다.' });
+
+    try {
+        const fetchOptions = {
+            method: req.method,
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        };
+
+        if (['POST', 'PUT', 'PATCH'].includes(req.method)) fetchOptions.body = JSON.stringify(req.body);
+
+        const airRes = await fetch(targetUrl, fetchOptions);
+        const airData = await airRes.json();
+        res.status(airRes.status).json(airData);
+    } catch (err) {
+        console.error('❌ 프록시 오류:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * ── GET /health ─────────────────────────────────────────────────── (상태 체크)
+ */
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        outputSheets: OUTPUT_SHEETS,
-        libreoffice: SOFFICE_PATH,
-        template: TEMPLATE_PATH,
+        envCheck: !!process.env.AIRTABLE_API_KEY,
+        time: new Date().toLocaleString()
     });
 });
 
@@ -168,7 +208,5 @@ function cleanup(...files) {
 }
 
 app.listen(PORT, () => {
-    console.log(`🚀 PDF 생성 서버 실행 중 → http://localhost:${PORT} (xlsx-populate 적용본)`);
-    console.log(`   출력 시트: ${OUTPUT_SHEETS.join(', ')}`);
-    console.log(`   템플릿: ${TEMPLATE_PATH}`);
+    console.log(`🚀 서버 실행 중 → http://localhost:${PORT}`);
 });
