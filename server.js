@@ -101,9 +101,9 @@ app.post('/upload-pdf-to-airtable', async (req, res) => {
     try {
         const { mapping, airtableInfo } = req.body;
         const { baseId, recordId } = airtableInfo;
-        const token = process.env.AIRTABLE_API_KEY; // Railway에서 설정된 키
+        const token = process.env['airtable API key'] || process.env.AIRTABLE_API_KEY; // 사용자가 명시한 정확한 키 우선 사용
 
-        if (!token) throw new Error('서버 환경 변수 AIRTABLE_API_KEY가 없습니다.');
+        if (!token) throw new Error('서버 환경 변수(airtable API key)가 설정되지 않았습니다.');
 
         const workbook = await XlsxPopulate.fromFileAsync(TEMPLATE_PATH);
         const actualSheets = Object.keys(mapping);
@@ -166,9 +166,9 @@ app.post('/upload-pdf-to-airtable', async (req, res) => {
 app.all('/airtable-proxy/*', async (req, res) => {
     const queryStr = req.url.includes('?') ? '?' + req.url.split('?')[1] : '';
     const targetUrl = `https://api.airtable.com/v0/${req.params[0]}${queryStr}`;
-    const token = process.env.AIRTABLE_API_KEY;
+    const token = process.env['airtable API key'] || process.env.AIRTABLE_API_KEY;
 
-    if (!token) return res.status(500).json({ error: '서버에 AIRTABLE_API_KEY가 설정되지 않았습니다.' });
+    if (!token) return res.status(500).json({ error: '서버에 에어테이블 API 키가 설정되지 않았습니다.' });
 
     try {
         const fetchOptions = {
@@ -196,7 +196,7 @@ app.all('/airtable-proxy/*', async (req, res) => {
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        envCheck: !!process.env.AIRTABLE_API_KEY,
+        envCheck: !!(process.env['airtable API key'] || process.env.AIRTABLE_API_KEY),
         time: new Date().toLocaleString()
     });
 });
