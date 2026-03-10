@@ -163,7 +163,7 @@ app.post('/upload-pdf-to-airtable', async (req, res) => {
 /**
  * ── ANY /airtable-proxy ────────────────────────────────────────────────── (보안 프록시)
  */
-app.all('/airtable-proxy/*', async (req, res) => {
+app.all('/airtable-proxy/(.*)', async (req, res) => {
     const queryStr = req.url.includes('?') ? '?' + req.url.split('?')[1] : '';
     const targetUrl = `https://api.airtable.com/v0/${req.params[0]}${queryStr}`;
     const token = process.env['airtable API key'] || process.env.AIRTABLE_API_KEY;
