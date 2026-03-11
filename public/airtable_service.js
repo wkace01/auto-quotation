@@ -10,7 +10,8 @@ const AIRTABLE_CONFIG = {
 };
 
 // 백엔드 서버 URL 설정 (로컬 환경 vs 실제 배포 환경 자동 구분)
-const BACKEND_URL = (window.location.port === '3000' || window.location.hostname === '127.0.0.1')
+// localhost 또는 127.0.0.1이면 어떤 포트든 3001로 프록시
+const BACKEND_URL = ['localhost', '127.0.0.1'].includes(window.location.hostname)
     ? 'http://localhost:3001'
     : '';
 
@@ -103,7 +104,12 @@ window.airtableService = {
         const searchUrl = `${PROXY_URL}/${AIRTABLE_CONFIG.BASE_ID}/${AIRTABLE_CONFIG.TABLE_CUSTOMER}?filterByFormula=${encodeURIComponent(formula)}`;
 
         const response = await fetch(searchUrl);
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`고객 조회 실패 (${response.status}): ${errText.slice(0, 200)}`);
+        }
         const data = await response.json();
+        if (data.error) throw new Error(`Airtable 오류: ${data.error.message || JSON.stringify(data.error)}`);
 
         // 연락처 자동 분류
         let finalPhone = managerPhone || '';

@@ -1,24 +1,23 @@
 // ============================================================================
-// [공통 모듈] common.js
-// 우경정보통신 각 사업부에서 공통으로 사용하는 유틸리티 스크립트
-// - 카카오 우편번호 API 연동 (UI 제어 포함)
-// - 공공데이터포털 건축물대장 API 호출 (주소 기반 표제부 조회)
+// [怨듯넻 紐⑤뱢] common.js
+// ?곌꼍?뺣낫?듭떊 媛??ъ뾽遺?먯꽌 怨듯넻?쇰줈 ?ъ슜?섎뒗 ?좏떥由ы떚 ?ㅽ겕由쏀듃
+// - 移댁뭅???고렪踰덊샇 API ?곕룞 (UI ?쒖뼱 ?ы븿)
+// - 怨듦났?곗씠?고룷??嫄댁텞臾쇰???API ?몄텧 (二쇱냼 湲곕컲 ?쒖젣遺 議고쉶)
 // ============================================================================
 
 const JUSO_API_KEY = "U01TX0FVVEgyMDI1MTAxMDExNDkyNjExNjMxMTY=";
 const BUILDING_API_KEY = "a80d7fbe3842d32f845889a352543d38fde0cf1625508e615c3fbf5705d36578";
 
 /**
- * 1. 건물의 도로명/지번 주소 텍스트로 행정표준코드(법정동코드/시군구코드 등) 변환
- */
+ * 1. 嫄대Ъ???꾨줈紐?吏踰?二쇱냼 ?띿뒪?몃줈 ?됱젙?쒖?肄붾뱶(踰뺤젙?숈퐫???쒓뎔援ъ퐫???? 蹂?? */
 async function getAddressInfo(keyword) {
     const url = `https://www.juso.go.kr/addrlink/addrLinkApi.do?confmKey=${JUSO_API_KEY}&currentPage=1&countPerPage=5&keyword=${encodeURIComponent(keyword)}&resultType=json`;
     const res = await fetch(url);
     const data = await res.json();
     const common = data.results?.common;
-    if (common?.errorCode !== '0') throw new Error(common?.errorMessage || '주소 API 오류');
+    if (common?.errorCode !== '0') throw new Error(common?.errorMessage || '二쇱냼 API ?ㅻ쪟');
     const juso = data.results?.juso?.[0];
-    if (!juso) throw new Error('검색된 주소가 없습니다.');
+    if (!juso) throw new Error('寃?됰맂 二쇱냼媛 ?놁뒿?덈떎.');
     const admCd = juso.admCd || '';
     return {
         sigunguCd: admCd.substring(0, 5),
@@ -31,13 +30,13 @@ async function getAddressInfo(keyword) {
 }
 
 /**
- * 2. 건축물대장 표제부 API를 호출하여 건물 면적 및 상세 스펙 파악
+ * 2. 嫄댁텞臾쇰????쒖젣遺 API瑜??몄텧?섏뿬 嫄대Ъ 硫댁쟻 諛??곸꽭 ?ㅽ럺 ?뚯븙
  */
 async function fetchBuildingRegister(info) {
     const { sigunguCd, bjdongCd, bun, ji } = info;
     const paddedBun = bun.padStart(4, '0');
     const paddedJi = ji.padStart(4, '0');
-    // HTTPS 호환 및 XML 응답을 반환하는 안전한 Hub EndPoint 사용
+    // HTTPS ?명솚 諛?XML ?묐떟??諛섑솚?섎뒗 ?덉쟾??Hub EndPoint ?ъ슜
     const url = `https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo?serviceKey=${BUILDING_API_KEY}&sigunguCd=${sigunguCd}&bjdongCd=${bjdongCd}&bun=${paddedBun}&ji=${paddedJi}&numOfRows=100&pageNo=1`;
 
     const res = await fetch(url);
@@ -46,12 +45,12 @@ async function fetchBuildingRegister(info) {
     const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
 
     const totalCount = parseInt(xmlDoc.getElementsByTagName('totalCount')[0]?.textContent || '0');
-    if (totalCount === 0) throw new Error('해당 지번에 건축물대장 정보가 없습니다.');
+    if (totalCount === 0) throw new Error('?대떦 吏踰덉뿉 嫄댁텞臾쇰????뺣낫媛 ?놁뒿?덈떎.');
 
     const items = xmlDoc.getElementsByTagName('item');
     const arr = Array.from(items);
 
-    // 주건축물(mainAtchGbCd === '0') 찾기
+    // 二쇨굔異뺣Ъ(mainAtchGbCd === '0') 李얘린
     let target = arr.find(item => {
         const gbCd = item.getElementsByTagName('mainAtchGbCd')[0]?.textContent;
         return gbCd === '0';
@@ -60,7 +59,7 @@ async function fetchBuildingRegister(info) {
 
     const getVal = (tag) => target.getElementsByTagName(tag)[0]?.textContent?.trim() || '';
 
-    // 기존 app.js에서 사용하던 공용 스키마(Object) 형태로 반환
+    // 湲곗〈 app.js?먯꽌 ?ъ슜?섎뜕 怨듭슜 ?ㅽ궎留?Object) ?뺥깭濡?諛섑솚
     return {
         totArea: getVal('totArea'),
         mainPurpsCdNm: getVal('mainPurpsCdNm'),
@@ -73,39 +72,54 @@ async function fetchBuildingRegister(info) {
 }
 
 /**
- * 3. 카카오 우편번호 서비스 임베딩 및 이벤트 핸들링 초기화 (index.html 연동)
+ * 3. 移댁뭅???고렪踰덊샇 ?쒕퉬???꾨쿋??諛??대깽???몃뱾留?珥덇린??(index.html ?곕룞)
  */
 function initKakaoPostcode(embedContainerId, onCompleteCallback) {
     const el = document.getElementById(embedContainerId);
     if (!el) {
-        console.warn(`[Kakao] 임베딩 컨테이너(#${embedContainerId})를 찾을 수 없습니다.`);
+        console.warn(`[Kakao] 컨테이너 요소(#${embedContainerId})를 찾을 수 없습니다.`);
         return;
     }
 
     if (!window.daum || !window.daum.Postcode) {
-        console.warn("[Kakao] Postcode SDK 미로드 상태");
+        console.warn("[Kakao] Postcode SDK 미준비 상태");
         return;
     }
 
-    new daum.Postcode({
-        oncomplete: function (data) {
-            let addr = data.roadAddress || data.jibunAddress;
-            let extraAddr = '';
+    // 기존 내용 초기화
+    el.innerHTML = '';
 
-            if (data.bname !== '' && /[동|로|가]$/g.test(data.bname)) extraAddr += data.bname;
-            if (data.buildingName !== '' && data.apartment === 'Y') {
-                extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName);
-            }
-            if (extraAddr !== '') addr += ` (${extraAddr})`;
+    function doEmbed() {
+        // 컨테이너가 DOM에 렌더링되어 실제 크기가 잡혀있는지 확인
+        if (el.offsetWidth === 0 || el.offsetHeight === 0) {
+            // 크기가 아직 0이면 다음 애니메이션 프레임에서 재시도
+            requestAnimationFrame(doEmbed);
+            return;
+        }
 
-            // 콜백 호출
-            if (typeof onCompleteCallback === 'function') {
-                onCompleteCallback(addr, data.buildingName);
-            }
-        },
-        width: '100%',
-        height: '100%'
-    }).embed(el);
+        new daum.Postcode({
+            oncomplete: function (data) {
+                let addr = data.roadAddress || data.jibunAddress;
+                let extraAddr = '';
+
+                if (data.bname !== '' && /[동로가]$/g.test(data.bname)) extraAddr += data.bname;
+                if (data.buildingName !== '' && data.apartment === 'Y') {
+                    extraAddr += (extraAddr !== '' ? ', ' + data.buildingName : data.buildingName);
+                }
+                if (extraAddr !== '') addr += ` (${extraAddr})`;
+
+                // 콜백 호출 (addr, buildingName, 원본 data 전달)
+                if (typeof onCompleteCallback === 'function') {
+                    onCompleteCallback(addr, data.buildingName, data);
+                }
+            },
+            width: '100%',
+            height: '100%'
+        }).embed(el);
+    }
+
+    // requestAnimationFrame으로 레이아웃 완료 후 embed 실행
+    requestAnimationFrame(doEmbed);
 }
 
 // Global Export

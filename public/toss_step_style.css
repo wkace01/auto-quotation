@@ -32,7 +32,8 @@
 }
 
 body, input, select, textarea, button, table, td, th {
-    font-family: 'TossFaceFontMac', 'Toss Face Font Mac', 'TossFace Font Mac', 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif !important;
+    letter-spacing: -0.01em;
 }
 
 /* Hide native number input arrows */
@@ -429,6 +430,8 @@ button {
     background: transparent;
     border: none;
     font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
 }
 
 .cond-field:focus {
@@ -485,10 +488,14 @@ button {
     font-weight: 800;
     color: var(--toss-blue);
     font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
 }
 #cond-monthly-total {
     font-weight: 700;
     font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
 }
 
 /* Summary Grid - Toss Style */
@@ -517,6 +524,10 @@ button {
     font-size: 1.05rem;
     font-weight: 700;
     color: var(--toss-text-main);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    text-align: right;
+    white-space: nowrap;
 }
 
 .stat-card.highlight {

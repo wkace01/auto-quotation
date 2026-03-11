@@ -23,3 +23,8 @@ unify_sheet_sizes.py
 
 # Keep the official exact template tracked if needed
 !정보통신사업부 견적서 양식_ver1.xlsx
+
+# Environment variables (API keys - NEVER commit!)
+.env
+.env.local
+.env.*.local

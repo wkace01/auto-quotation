@@ -1,3 +1,5 @@
+require('dotenv').config(); // .env 파일 로드 (로컬 개발용, 배포 환경에서는 플랫폼 환경변수 사용)
+
 const express = require('express');
 const cors = require('cors');
 const XlsxPopulate = require('xlsx-populate');
