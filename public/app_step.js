@@ -1038,7 +1038,7 @@ function setPdfBtnEnabled(enabled) {
     pdfBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
 }
 
-// PDF 저장 버튼 - LibreOffice 서버 호출
+// PDF 저장 버튼 - PDF 생성과 에어테이블 저장을 독립적으로 실행
 document.getElementById('btn-save-pdf').addEventListener('click', async () => {
     const mapping = generateMapping();
     const btn = document.getElementById('btn-save-pdf');
@@ -1050,73 +1050,82 @@ document.getElementById('btn-save-pdf').addEventListener('click', async () => {
     }
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PDF 생성 중...';
-    showStatusBar('<i class="fas fa-spinner fa-spin"></i> Excel 데이터 입력 및 LibreOffice PDF 변환 중... (약 10초 소요)', 'info');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 처리 중...';
+    showStatusBar('<i class="fas fa-spinner fa-spin"></i> PDF 생성 및 에어테이블 저장 중...', 'info');
 
-    try {
-        // 1. PDF 서버 호출 (다운로드용)
+    // ── PDF 생성 & 다운로드 함수 (독립 실행) ──────────────────────────────
+    async function generateAndDownloadPdf() {
         const pdfRes = await fetch(PDF_SERVER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(mapping)
         });
-
         if (!pdfRes.ok) {
             const errData = await pdfRes.json().catch(() => ({ error: pdfRes.statusText }));
             throw new Error(errData.error || `PDF 서버 오류 (${pdfRes.status})`);
         }
-
-        // 2. PDF 다운로드 처리
         const blob = await pdfRes.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
         const disposition = pdfRes.headers.get('Content-Disposition') || '';
         const nameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
-        const fileName = nameMatch ? decodeURIComponent(nameMatch[1]) : `${state.customerName || '견적서'}_견적서.pdf`;
+        const fileName = nameMatch
+            ? decodeURIComponent(nameMatch[1])
+            : `${state.customerName || '견적서'}_견적서.pdf`;
 
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        // 3. 에어테이블 저장 및 PDF 업로드 (통합 동작)
-        showStatusBar('<i class="fas fa-spinner fa-spin"></i> 에어테이블 DB 기록 및 PDF 업로드 중...', 'info');
+        // 다운로드 트리거 (모바일에서 실패해도 throw 하지 않음)
         try {
-            const airResult = await window.airtableService.saveQuotation(state);
-            showStatusBar(`✅ <b>${fileName}</b> 다운로드 및 에어테이블 저장 성공!`, 'success');
-            
-            // 관리자 도구용 최근 기록 업데이트
-            if (airResult && airResult.quotationId) {
-                const recordUrl = `https://airtable.com/appFEZaTg3yZU1QwW/tbloif1mheDqaRRuR/${airResult.quotationId}`;
-                const recentEl = document.getElementById('status-recent-record');
-                if (recentEl) {
-                    recentEl.innerHTML = `<a href="${recordUrl}" target="_blank" style="color:var(--toss-blue); font-weight:600; text-decoration:none;">보기 <i class="fas fa-external-link-alt" style="font-size:0.75rem;"></i></a>`;
-                }
-            }
-        } catch (airErr) {
-            console.error('[Airtable Integration Error]:', airErr);
-            showStatusBar(`✅ PDF는 생성되었으나, 에어테이블 저장에 실패했습니다: ${airErr.message}`, 'warning');
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (downloadErr) {
+            console.warn('[PDF Download] 자동 다운로드 실패 (모바일 환경):', downloadErr.message);
         }
+        return fileName;
+    }
 
-        btn.innerHTML = '<i class="fas fa-check-circle"></i> 견적서 발행 완료';
-        
-        setTimeout(() => {
-            btn.innerHTML = '<i class="fas fa-file-pdf"></i> 견적서 PDF 생성 및 저장';
-            btn.disabled = false;
-        }, 3000);
+    // ── 두 작업 병렬 실행 (어느 한쪽 실패가 다른 쪽에 영향 없음) ──────────
+    const [pdfResult, airResult] = await Promise.allSettled([
+        generateAndDownloadPdf(),
+        window.airtableService.saveQuotation(state)
+    ]);
 
-    } catch (err) {
-        console.error('견적 발행 오류:', err);
-        let msg = err.message;
-        if (err.message.includes('fetch') || err.message.includes('Failed to fetch')) {
-            msg = '서버에 연결할 수 없습니다. 터미널에서 <code>node server.js</code>를 확인해주세요.';
+    // ── 결과 처리 ──────────────────────────────────────────────────────────
+    const pdfOk  = pdfResult.status  === 'fulfilled';
+    const airOk  = airResult.status  === 'fulfilled';
+    const fileName = pdfOk ? pdfResult.value : `${state.customerName || '견적서'}_견적서.pdf`;
+
+    if (pdfOk && airOk) {
+        showStatusBar(`✅ <b>${fileName}</b> 다운로드 및 에어테이블 저장 성공!`, 'success');
+    } else if (pdfOk && !airOk) {
+        console.error('[Airtable]', airResult.reason);
+        showStatusBar(`✅ PDF 다운로드 완료 — 에어테이블 저장 실패: ${airResult.reason?.message || ''}`, 'warning');
+    } else if (!pdfOk && airOk) {
+        console.error('[PDF]', pdfResult.reason);
+        showStatusBar(`⚠️ 에어테이블 저장 성공 — PDF 생성 실패: ${pdfResult.reason?.message || ''}`, 'warning');
+    } else {
+        console.error('[PDF]', pdfResult.reason);
+        console.error('[Airtable]', airResult.reason);
+        showStatusBar(`❌ PDF 생성 및 에어테이블 저장 모두 실패했습니다.`, 'error');
+    }
+
+    // 에어테이블 저장 성공 시 관리자 최근 기록 링크 업데이트
+    if (airOk && airResult.value?.quotationId) {
+        const recordUrl = `https://airtable.com/appFEZaTg3yZU1QwW/tbloif1mheDqaRRuR/${airResult.value.quotationId}`;
+        const recentEl = document.getElementById('status-recent-record');
+        if (recentEl) {
+            recentEl.innerHTML = `<a href="${recordUrl}" target="_blank" style="color:var(--toss-blue); font-weight:600; text-decoration:none;">보기 <i class="fas fa-external-link-alt" style="font-size:0.75rem;"></i></a>`;
         }
-        showStatusBar(`❌ 오류: ${msg}`, 'error');
+    }
+
+    btn.innerHTML = '<i class="fas fa-check-circle"></i> 견적서 발행 완료';
+    setTimeout(() => {
         btn.innerHTML = '<i class="fas fa-file-pdf"></i> 견적서 PDF 생성 및 저장';
         btn.disabled = false;
-    }
+    }, 3000);
 });
 
 
