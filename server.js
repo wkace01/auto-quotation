@@ -103,9 +103,9 @@ app.post('/upload-pdf-to-airtable', async (req, res) => {
     try {
         const { mapping, airtableInfo } = req.body;
         const { baseId, recordId } = airtableInfo;
-        const token = process.env['airtable API key'] || process.env.AIRTABLE_API_KEY; // 사용자가 명시한 정확한 키 우선 사용
+        const token = process.env.AIRTABLE_API_KEY;
 
-        if (!token) throw new Error('서버 환경 변수(airtable API key)가 설정되지 않았습니다.');
+        if (!token) throw new Error('서버 환경 변수(AIRTABLE_API_KEY)가 설정되지 않았습니다.');
 
         const workbook = await XlsxPopulate.fromFileAsync(TEMPLATE_PATH);
         const actualSheets = Object.keys(mapping);
